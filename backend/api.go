@@ -38,10 +38,6 @@ type PostUserLocation struct {
 	Longitude *float64   `json:"longitude"`
 }
 
-type GetLocationRequest struct {
-	Filter string `json:"filter"`
-}
-
 type GetLocationResponse struct {
 	Locations map[string][]LocationInstance `json:"locations"`
 }
@@ -230,13 +226,7 @@ func postLocation(c *gin.Context) {
 }
 
 func getLocation(c *gin.Context) {
-	var req GetLocationRequest
 	var resp GetLocationResponse
-
-	if err := c.BindJSON(&req); err != nil {
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
 
 	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.username=locationhistory.username")
 	if err != nil {
