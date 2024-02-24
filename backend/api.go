@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -24,8 +23,8 @@ type LoginRequest struct {
 }
 
 type PostUserLocation struct {
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
 }
 
 type GetLocationRequest struct {
@@ -152,22 +151,13 @@ func logout(c *gin.Context) {
 	}
 
 	var cookiestr sql.NullString
-
-	row := db.QueryRow("SELECT sessionid FROM users WHERE sessionid='b95c2413-76d1-4981-8ed6-0cd439ae86c5'")
-	row.Scan(&cookiestr)
-	log.Printf("received cookie: '%s'", cookiestr.String)
-
-	row = db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, cookie)
-
+	row := db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, cookie)
 	err = row.Scan(&cookiestr)
-	fmt.Println(cookiestr.String)
-	fmt.Println(cookiestr.Valid)
-	if err == sql.ErrNoRows || !cookiestr.Valid {
-		log.Printf("received cookie: '%s' does not exist\n", cookie)
+
+	if err == sql.ErrNoRows {
+		log.Printf("session id '%s' does not exist\n", cookie)
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
-	} else {
-		log.Printf("received cookie: %s", cookiestr.String)
 	}
 
 	tx, _ := db.Begin()
@@ -185,18 +175,41 @@ func logout(c *gin.Context) {
 }
 
 func postLocation(c *gin.Context) {
-	var location PostUserLocation
+	var req PostUserLocation
 	var resp Empty
 
-	if err := c.BindJSON(&location); err != nil {
+	if err := c.BindJSON(&req); err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusBadRequest, resp)
+		return
+	}
+	if req.Latitude == nil || req.Longitude == nil {
+		log.Println("invalid latitude or longitude")
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
-	_, err := c.Cookie("session")
+	cookie, err := c.Cookie("session")
 	if err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusForbidden, resp)
 		return
+	}
+
+	var cookiestr sql.NullString
+	row := db.QueryRow(`SELECT sessionid FROM location WHERE sessionid=$1`, cookie)
+	err = row.Scan(&cookiestr)
+
+	if err == sql.ErrNoRows {
+		tx, _ := db.Begin()
+		_, err = tx.Exec("INSERT INTO location (sessionid, longitude, latitude) VALUES (?, ?, ?)", cookie, req.Longitude, req.Latitude)
+		tx.Commit()
+
+	} else {
+		tx, _ := db.Begin()
+		_, err = tx.Exec("UPDATE location SET longitude=? WHERE sessionid=?", req.Longitude, cookie)
+		_, err = tx.Exec("UPDATE location SET latitude=? WHERE sessionid=?", req.Latitude, cookie)
+		tx.Commit()
 	}
 
 	c.IndentedJSON(http.StatusCreated, resp)
@@ -213,14 +226,30 @@ func getLocation(c *gin.Context) {
 
 	_, err := c.Cookie("session")
 	if err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusForbidden, resp)
 		return
 	}
 
-	locations := []LocationInstance{
-		{Username: "user1", Latitude: 123, Longitude: 456},
-		{Username: "user2", Latitude: 456, Longitude: 789},
+	rows, err := db.Query("select users.username, location.longitude, location.latitude from location left join users on users.sessionid=location.sessionid")
+	if err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
 	}
+
+	locations := []LocationInstance{}
+	for rows.Next() {
+		location := LocationInstance{}
+		if err := rows.Scan(&location.Username, &location.Longitude, &location.Latitude); err != nil {
+			log.Println(err)
+			c.IndentedJSON(http.StatusInternalServerError, resp)
+			return
+		}
+
+		locations = append(locations, location)
+	}
+
 	resp.Locations = locations
 
 	c.IndentedJSON(http.StatusOK, resp)
