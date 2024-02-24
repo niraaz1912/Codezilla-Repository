@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -46,12 +47,14 @@ func createAccount(c *gin.Context) {
 	var resp Empty
 
 	if err := c.BindJSON(&req); err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 8)
 	if err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
 		return
 	}
@@ -61,6 +64,7 @@ func createAccount(c *gin.Context) {
 	var username string
 	err = row.Scan(&username)
 	if err != sql.ErrNoRows {
+		log.Println("User already exists")
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
 	}
@@ -82,11 +86,12 @@ func login(c *gin.Context) {
 	var resp Empty
 
 	if err := c.BindJSON(&req); err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
-	var sessionIdString string
+	var sessionIdString sql.NullString
 	var passhash string
 
 	log.Println(req.Username)
@@ -94,6 +99,8 @@ func login(c *gin.Context) {
 	err := row.Scan(&sessionIdString, &passhash)
 	if err != nil {
 		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(req.Password)); err != nil {
@@ -104,13 +111,13 @@ func login(c *gin.Context) {
 	}
 
 	sessionid := uuid.New()
-	if sessionIdString == "" {
+	if !sessionIdString.Valid {
 
 		cookie, err := c.Cookie("session")
 
 		if err != nil {
 			cookie = sessionid.String()
-			c.SetCookie("session", cookie, 3500, "/", "localhost", false, true)
+			c.SetCookie("session", cookie, 100000, "/", "localhost", false, true)
 		}
 
 		tx, _ := db.Begin()
@@ -123,7 +130,7 @@ func login(c *gin.Context) {
 		}
 	} else {
 		var err error
-		sessionid, err = uuid.Parse(sessionIdString)
+		sessionid, err = uuid.Parse(sessionIdString.String)
 		if err != nil {
 			log.Println(err)
 			c.IndentedJSON(http.StatusBadRequest, resp)
@@ -139,21 +146,32 @@ func logout(c *gin.Context) {
 
 	cookie, err := c.Cookie("session")
 	if err != nil {
+		log.Println(err)
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
-	row := db.QueryRow("select sessionID from users where sessionID=?", cookie)
+	var cookiestr sql.NullString
 
-	var cookiestr string
+	row := db.QueryRow("SELECT sessionid FROM users WHERE sessionid='b95c2413-76d1-4981-8ed6-0cd439ae86c5'")
+	row.Scan(&cookiestr)
+	log.Printf("received cookie: '%s'", cookiestr.String)
+
+	row = db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, cookie)
+
 	err = row.Scan(&cookiestr)
-	if err != sql.ErrNoRows {
+	fmt.Println(cookiestr.String)
+	fmt.Println(cookiestr.Valid)
+	if err == sql.ErrNoRows || !cookiestr.Valid {
+		log.Printf("received cookie: '%s' does not exist\n", cookie)
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
+	} else {
+		log.Printf("received cookie: %s", cookiestr.String)
 	}
 
 	tx, _ := db.Begin()
-	_, err = tx.Exec("UPDATE users SET sessionID=null WHERE sessionid=?", cookie)
+	_, err = tx.Exec("UPDATE users SET sessionid=null WHERE sessionid=?", cookie)
 	tx.Commit()
 	if err != nil {
 		log.Println(err)
@@ -220,6 +238,7 @@ func main() {
 	router := gin.Default()
 	router.POST("/login/new", createAccount)
 	router.POST("/login", login)
+	router.POST("/logout", logout)
 	router.POST("/location", postLocation)
 	router.GET("/location", getLocation)
 
