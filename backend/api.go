@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -11,6 +10,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const fileName = "db.db"
 
 var db *sql.DB
 
@@ -59,9 +60,7 @@ func createAccount(c *gin.Context) {
 
 	var username string
 	err = row.Scan(&username)
-	fmt.Println(username)
 	if err != sql.ErrNoRows {
-		fmt.Println(err)
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
 	}
@@ -87,13 +86,25 @@ func login(c *gin.Context) {
 		return
 	}
 
-	var sessionIdString *string
+	var sessionIdString string
+	var passhash string
 
-	row := db.QueryRow("SELECT sessionID FROM users WHERE username=?", req.Username)
-	row.Scan(&sessionIdString)
+	log.Println(req.Username)
+	row := db.QueryRow("SELECT sessionID, passhash FROM users WHERE username=?", req.Username)
+	err := row.Scan(&sessionIdString, &passhash)
+	if err != nil {
+		log.Println(err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(req.Password)); err != nil {
+		log.Println(passhash)
+		log.Println(err)
+		c.IndentedJSON(http.StatusUnauthorized, resp)
+		return
+	}
 
 	sessionid := uuid.New()
-	if sessionIdString == nil {
+	if sessionIdString == "" {
 
 		cookie, err := c.Cookie("session")
 
@@ -112,13 +123,45 @@ func login(c *gin.Context) {
 		}
 	} else {
 		var err error
-		sessionid, err = uuid.Parse(*sessionIdString)
+		sessionid, err = uuid.Parse(sessionIdString)
 		if err != nil {
 			log.Println(err)
 			c.IndentedJSON(http.StatusBadRequest, resp)
 			return
 		}
 	}
+
+	c.IndentedJSON(http.StatusOK, resp)
+}
+
+func logout(c *gin.Context) {
+	var resp Empty
+
+	cookie, err := c.Cookie("session")
+	if err != nil {
+		c.IndentedJSON(http.StatusBadRequest, resp)
+		return
+	}
+
+	row := db.QueryRow("select sessionID from users where sessionID=?", cookie)
+
+	var cookiestr string
+	err = row.Scan(&cookiestr)
+	if err != sql.ErrNoRows {
+		c.IndentedJSON(http.StatusUnauthorized, resp)
+		return
+	}
+
+	tx, _ := db.Begin()
+	_, err = tx.Exec("UPDATE users SET sessionID=null WHERE sessionid=?", cookie)
+	tx.Commit()
+	if err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
+	}
+
+	c.SetCookie("session", "", -1, "/", "localhost", false, true)
 
 	c.IndentedJSON(http.StatusOK, resp)
 }
@@ -165,11 +208,7 @@ func getLocation(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, resp)
 }
 
-const fileName = "db.db"
-
 func main() {
-	fmt.Println("hello, world")
-
 	var err error
 
 	db, err = sql.Open("sqlite3", fileName)
@@ -177,17 +216,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	val := db.QueryRow("SELECT * from users")
-
-	var sessionID string
-	var username string
-	var role string
-	var passhash string
-
-	val.Scan(&sessionID, &username, &role, &passhash)
-
-	fmt.Println(username)
 
 	router := gin.Default()
 	router.POST("/login/new", createAccount)
