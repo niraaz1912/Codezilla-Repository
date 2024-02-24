@@ -284,6 +284,7 @@ func main() {
 	router := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
+	config.AllowOrigins = []string{"localhost", "heron.cs.umanitoba.ca"}
 	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
