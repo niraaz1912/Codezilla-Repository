@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Empty struct{}
@@ -35,13 +36,21 @@ type LocationInstance struct {
 }
 
 func createAccount(c *gin.Context) {
-	var login LoginRequest
+	var req LoginRequest
 	var resp Empty
 
-	if err := c.BindJSON(&login); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 8)
+	if err != nil {
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
+	}
+
+	fmt.Println(string(hashed))
 
 	sessionid := uuid.New()
 
@@ -122,6 +131,7 @@ func main() {
 	fmt.Println("hello, world")
 
 	router := gin.Default()
+	router.POST("/login/new", createAccount)
 	router.POST("/login", login)
 	router.POST("/location", postLocation)
 	router.GET("/location", getLocation)
