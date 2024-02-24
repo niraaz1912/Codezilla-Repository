@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -98,7 +99,7 @@ func login(c *gin.Context) {
 	err := row.Scan(&sessionIdString, &passhash)
 	if err != nil {
 		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
+		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
 	}
 
@@ -271,11 +272,19 @@ func main() {
 	}
 
 	router := gin.Default()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"*"},
+		AllowHeaders:     []string{"Origin"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
 	router.POST("/login/new", createAccount)
 	router.POST("/login", login)
 	router.POST("/logout", logout)
 	router.POST("/location", postLocation)
 	router.GET("/location", getLocation)
 
-	router.Run("localhost:8081")
+	router.Run(":8081")
 }
