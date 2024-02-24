@@ -162,12 +162,18 @@ func logout(c *gin.Context) {
 
 	tx, _ := db.Begin()
 	_, err = tx.Exec("UPDATE users SET sessionid=null WHERE sessionid=?", cookie)
-	tx.Commit()
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
 		return
 	}
+	_, err = tx.Exec("DELETE FROM location WHERE sessionid=?", cookie)
+	if err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
+	}
+	tx.Commit()
 
 	c.SetCookie("session", "", -1, "/", "localhost", false, true)
 
