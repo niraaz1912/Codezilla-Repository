@@ -1,7 +1,7 @@
 const transformHeaders = (endpoint) => {
-  const sessionId = localStorage.getItem("session");
+  const sessionId = localStorage.getItem("sessionid");
 
-  if(!sessionId) {
+  if (!sessionId) {
     window.location.replace("/login.html")
     return;
   }
@@ -12,12 +12,32 @@ const transformHeaders = (endpoint) => {
   }
 }
 
-const isUserLoggedIn = () => {
-  const sessionId = localStorage.getItem("sessionid");
+const transformEndpoint = (endpoint) => {
+  return "http://heron.cs.umanitoba.ca:8081/" + endpoint;
+}
 
-  if(sessionId) {
-    window.location.replace("/dashboard.html")
-  }
+
+const postRequest = (endpoint, requestBody) => {
+  return fetch(transformEndpoint(endpoint), {
+    method: "POST",
+    headers: {
+      Accept: "application.json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  }).catch(res => {
+    if (res.status === 401) {
+      window.location.replace("/login.html");
+    }
+  })
+}
+
+const getRequest = (endpoint) => {
+  return fetch(transformEndpoint(endpoint)).catch(res => {
+    if (res.status === 401) {
+      window.localStorage.replace("/login.html");
+    }
+  })
 }
 
 const loginBtn = document.getElementById("submit-btn");
@@ -29,11 +49,11 @@ loginBtn.addEventListener("click", () => {
   const userEmail = emailDiv.value;
   const userPwd = passwordDiv.value;
 
-  testLogin(userEmail, userPwd);
+  login(userEmail, userPwd);
 });
 
 
-function testLogin(userEmail, userPwd) {
+function login(userEmail, userPwd) {
   const requestBody = {
     username: userEmail,
     password: userPwd,
@@ -49,8 +69,7 @@ function testLogin(userEmail, userPwd) {
   })
     .then((res) => res.json())
     .then((out) => {
-      if("sessionid" in out) {
-        localStorage.setItem("sessionid", out["sessionid"])
-      }
+      localStorage.setItem("sessionid", out["sessionid"])
+      window.location.replace("/dashboard.html")
     });
 }
