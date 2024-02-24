@@ -2,10 +2,10 @@
 
 ## TABLES
 ### users
-- sessionID [string, PRIMARY KEY]
-- username [string]
+- username [string, PRIMARY KEY]
 - role [string]
 - passhash [string]
+- sessionID [string]
 
 ### location
 - sessionID [string, FOREIGN KEY]
