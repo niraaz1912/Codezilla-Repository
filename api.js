@@ -40,17 +40,45 @@ const getRequest = (endpoint) => {
   })
 }
 
-const loginBtn = document.getElementById("submit-btn");
+// #region SIGN UP PORTION
+const signUpForm = document.getElementById("sign-up-form");
 
-loginBtn.addEventListener("click", () => {
+signUpForm?.addEventListener("submit", (e) => {
+  e.preventDefault();
+
   const emailDiv = document.getElementById("email");
   const passwordDiv = document.getElementById("password");
 
-  const userEmail = emailDiv.value;
-  const userPwd = passwordDiv.value;
+  signUp(emailDiv.value, passwordDiv.value);
+})
 
-  login(userEmail, userPwd);
-});
+const signUp = (userEmail, userPwd) => {
+  const requestBody = {
+    username: userEmail,
+    password: userPwd,
+  };
+
+  const response = postRequest("/login/new", requestBody)
+    .then((res) => res.json())
+    .then((out) => {
+      localStorage.setItem("sessionid", "User has signed up")
+      window.location.replace("/dashboard.html")
+    });
+}
+// #endregion
+
+
+// #region LOGIN PORTION
+const loginForm = document.getElementById("login-form");
+
+loginForm?.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const emailDiv = document.getElementById("email");
+  const passwordDiv = document.getElementById("password");
+
+  login(emailDiv.value, passwordDiv.value);
+})
 
 
 function login(userEmail, userPwd) {
@@ -73,3 +101,4 @@ function login(userEmail, userPwd) {
       window.location.replace("/dashboard.html")
     });
 }
+// #endregion
