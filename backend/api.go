@@ -284,7 +284,7 @@ func main() {
 	router := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
-	router.Use(config)
+	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
 	router.POST("/login", login)
