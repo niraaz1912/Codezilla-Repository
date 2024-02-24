@@ -117,12 +117,7 @@ func login(c *gin.Context) {
 
 	sessionid := uuid.New()
 	if !sessionIdString.Valid {
-<<<<<<< HEAD
-		cookie, err := c.Cookie("session")
-=======
-
 		cookie, err := c.Cookie("sessionid")
->>>>>>> e4da1f1 (rename cookie)
 
 		if err != nil {
 			cookie = sessionid.String()
