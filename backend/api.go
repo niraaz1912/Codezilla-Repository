@@ -1,13 +1,18 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var db *sql.DB
 
 type Empty struct{}
 
@@ -50,36 +55,65 @@ func createAccount(c *gin.Context) {
 		return
 	}
 
-	fmt.Println(string(hashed))
+	row := db.QueryRow("select username from users where username=?", req.Username)
 
-	sessionid := uuid.New()
-
-	cookie, err := c.Cookie("session")
-
-	if err != nil {
-		cookie = sessionid.String()
-		c.SetCookie("session", cookie, 3500, "/", "localhost", false, true)
+	var username string
+	err = row.Scan(&username)
+	fmt.Println(username)
+	if err != sql.ErrNoRows {
+		fmt.Println(err)
+		c.IndentedJSON(http.StatusUnauthorized, resp)
+		return
 	}
 
-	c.IndentedJSON(http.StatusOK, resp)
+	_, err = db.Exec("INSERT INTO users (username, role, passhash) VALUES (?, 'user', ?)", req.Username, string(hashed))
+	if err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
+	}
+
+	c.IndentedJSON(http.StatusCreated, resp)
 }
 
 func login(c *gin.Context) {
-	var login LoginRequest
+	var req LoginRequest
 	var resp Empty
 
-	if err := c.BindJSON(&login); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
+	var sessionIdString *string
+
+	row := db.QueryRow("SELECT sessionID FROM users WHERE username=?", req.Username)
+	row.Scan(&sessionIdString)
+
 	sessionid := uuid.New()
+	if sessionIdString == nil {
 
-	cookie, err := c.Cookie("session")
+		cookie, err := c.Cookie("session")
 
-	if err != nil {
-		cookie = sessionid.String()
-		c.SetCookie("session", cookie, 3500, "/", "localhost", false, true)
+		if err != nil {
+			cookie = sessionid.String()
+			c.SetCookie("session", cookie, 3500, "/", "localhost", false, true)
+		}
+
+		_, err = db.Exec("UPDATE users SET sessionID=? WHERE username=?", sessionid, req.Username)
+		if err != nil {
+			log.Println(err)
+			c.IndentedJSON(http.StatusInternalServerError, resp)
+			return
+		}
+	} else {
+		var err error
+		sessionid, err = uuid.Parse(*sessionIdString)
+		if err != nil {
+			log.Println(err)
+			c.IndentedJSON(http.StatusBadRequest, resp)
+			return
+		}
 	}
 
 	c.IndentedJSON(http.StatusOK, resp)
@@ -127,8 +161,29 @@ func getLocation(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, resp)
 }
 
+const fileName = "db.db"
+
 func main() {
 	fmt.Println("hello, world")
+
+	var err error
+
+	db, err = sql.Open("sqlite3", fileName)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	val := db.QueryRow("SELECT * from users")
+
+	var sessionID string
+	var username string
+	var role string
+	var passhash string
+
+	val.Scan(&sessionID, &username, &role, &passhash)
+
+	fmt.Println(username)
 
 	router := gin.Default()
 	router.POST("/login/new", createAccount)
