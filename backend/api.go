@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -37,11 +38,11 @@ type GetLocationRequest struct {
 }
 
 type GetLocationResponse struct {
-	Locations []LocationInstance `json:"locations"`
+	Locations map[string][]LocationInstance `json:"locations"`
 }
 
 type LocationInstance struct {
-	Username  string  `json:"username"`
+	Time      uint64  `json:"time"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 }
@@ -209,21 +210,14 @@ func postLocation(c *gin.Context) {
 		return
 	}
 
-	var cookiestr sql.NullString
-	row := db.QueryRow(`SELECT sessionid FROM location WHERE sessionid=$1`, cookie)
-	err = row.Scan(&cookiestr)
-
-	if err == sql.ErrNoRows {
-		tx, _ := db.Begin()
-		_, err = tx.Exec("INSERT INTO location (sessionid, longitude, latitude) VALUES (?, ?, ?)", cookie, req.Longitude, req.Latitude)
-		tx.Commit()
-
-	} else {
-		tx, _ := db.Begin()
-		_, err = tx.Exec("UPDATE location SET longitude=? WHERE sessionid=?", req.Longitude, cookie)
-		_, err = tx.Exec("UPDATE location SET latitude=? WHERE sessionid=?", req.Latitude, cookie)
-		tx.Commit()
+	tx, _ := db.Begin()
+	_, err = tx.Exec("INSERT INTO locationhistory (sessionid, longitude, latitude, time) VALUES (?, ?, ?, ?)", cookie, req.Longitude, req.Latitude, time.Now().Unix())
+	if err != nil {
+		log.Println(err)
+		c.IndentedJSON(http.StatusInternalServerError, resp)
+		return
 	}
+	tx.Commit()
 
 	c.IndentedJSON(http.StatusCreated, resp)
 }
@@ -244,26 +238,27 @@ func getLocation(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.Query("select users.username, location.longitude, location.latitude from location left join users on users.sessionid=location.sessionid")
+	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.sessionid=locationhistory.sessionid;")
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
 		return
 	}
 
-	locations := []LocationInstance{}
+	locationHistoriesMap := map[string][]LocationInstance{}
 	for rows.Next() {
+		var key string
 		location := LocationInstance{}
-		if err := rows.Scan(&location.Username, &location.Longitude, &location.Latitude); err != nil {
+		if err := rows.Scan(&key, &location.Longitude, &location.Latitude, &location.Time); err != nil {
 			log.Println(err)
 			c.IndentedJSON(http.StatusInternalServerError, resp)
 			return
 		}
 
-		locations = append(locations, location)
+		locationHistoriesMap[key] = append(locationHistoriesMap[key], location)
 	}
 
-	resp.Locations = locations
+	resp.Locations = locationHistoriesMap
 
 	c.IndentedJSON(http.StatusOK, resp)
 }
