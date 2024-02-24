@@ -1,3 +1,25 @@
+const transformHeaders = (endpoint) => {
+  const sessionId = localStorage.getItem("session");
+
+  if(!sessionId) {
+    window.location.replace("/login.html")
+    return;
+  }
+
+  return {
+    "Accept": "application.json",
+    "Content-Type": "application/json",
+  }
+}
+
+const isUserLoggedIn = () => {
+  const sessionId = localStorage.getItem("sessionid");
+
+  if(sessionId) {
+    window.location.replace("/dashboard.html")
+  }
+}
+
 const loginBtn = document.getElementById("submit-btn");
 
 loginBtn.addEventListener("click", () => {
@@ -10,18 +32,6 @@ loginBtn.addEventListener("click", () => {
   testLogin(userEmail, userPwd);
 });
 
-function login(name, password) {
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/login", true);
-
-  // xhr.onload =
-  // (_) => {
-  //     if(xhr.readyState === 4)
-  // }
-
-  obj = { username: name, password: password };
-  xhr.send(JSON.stringify(obj));
-}
 
 function testLogin(userEmail, userPwd) {
   const requestBody = {
@@ -29,16 +39,18 @@ function testLogin(userEmail, userPwd) {
     password: userPwd,
   };
 
-  console.log("REACHED HERE");
-
-  const response = fetch("http://localhost:8081/login", {
+  const response = fetch("http://heron.cs.umanitoba.ca:8081/" + "login", {
     method: "POST",
     headers: {
       Accept: "application.json",
       "Content-Type": "application/json",
     },
-    body: requestBody,
+    body: JSON.stringify(requestBody),
   })
     .then((res) => res.json())
-    .then((out) => console.log(out));
+    .then((out) => {
+      if("sessionid" in out) {
+        localStorage.setItem("sessionid", out["sessionid"])
+      }
+    });
 }
