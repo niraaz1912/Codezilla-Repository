@@ -238,13 +238,6 @@ func getLocation(c *gin.Context) {
 		return
 	}
 
-	_, err := c.Cookie("sessionid")
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusForbidden, resp)
-		return
-	}
-
 	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.username=locationhistory.username")
 	if err != nil {
 		log.Println(err)
