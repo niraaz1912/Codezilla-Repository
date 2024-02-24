@@ -210,8 +210,18 @@ func postLocation(c *gin.Context) {
 		return
 	}
 
+	var username sql.NullString
+	row := db.QueryRow(`SELECT username FROM users WHERE sessionid=$1`, cookie)
+	err = row.Scan(&username)
+
+	if err == sql.ErrNoRows {
+		log.Printf("session id '%s' does not exist\n", cookie)
+		c.IndentedJSON(http.StatusUnauthorized, resp)
+		return
+	}
+
 	tx, _ := db.Begin()
-	_, err = tx.Exec("INSERT INTO locationhistory (sessionid, longitude, latitude, time) VALUES (?, ?, ?, ?)", cookie, req.Longitude, req.Latitude, time.Now().Unix())
+	_, err = tx.Exec("INSERT INTO locationhistory (username, longitude, latitude, time) VALUES (?, ?, ?, ?)", username, req.Longitude, req.Latitude, time.Now().Unix())
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
@@ -238,7 +248,7 @@ func getLocation(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.sessionid=locationhistory.sessionid;")
+	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.username=locationhistory.username")
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
