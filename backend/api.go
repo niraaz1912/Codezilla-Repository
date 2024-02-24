@@ -117,11 +117,16 @@ func login(c *gin.Context) {
 
 	sessionid := uuid.New()
 	if !sessionIdString.Valid {
+<<<<<<< HEAD
 		cookie, err := c.Cookie("session")
+=======
+
+		cookie, err := c.Cookie("sessionid")
+>>>>>>> e4da1f1 (rename cookie)
 
 		if err != nil {
 			cookie = sessionid.String()
-			c.SetCookie("session", cookie, 100000, "/", "localhost", false, true)
+			c.SetCookie("sessionid", cookie, 100000, "/", "localhost", false, true)
 		}
 
 		tx, _ := db.Begin()
@@ -150,7 +155,7 @@ func login(c *gin.Context) {
 func logout(c *gin.Context) {
 	var resp Empty
 
-	cookie, err := c.Cookie("session")
+	cookie, err := c.Cookie("sessionid")
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusBadRequest, resp)
@@ -182,7 +187,7 @@ func logout(c *gin.Context) {
 	}
 	tx.Commit()
 
-	c.SetCookie("session", "", -1, "/", "localhost", false, true)
+	c.SetCookie("sessionid", "", -1, "/", "localhost", false, true)
 
 	c.IndentedJSON(http.StatusOK, resp)
 }
@@ -202,7 +207,7 @@ func postLocation(c *gin.Context) {
 		return
 	}
 
-	cookie, err := c.Cookie("session")
+	cookie, err := c.Cookie("sessionid")
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusForbidden, resp)
@@ -240,7 +245,7 @@ func getLocation(c *gin.Context) {
 		return
 	}
 
-	_, err := c.Cookie("session")
+	_, err := c.Cookie("sessionid")
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusForbidden, resp)
