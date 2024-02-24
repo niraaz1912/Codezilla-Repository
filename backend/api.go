@@ -19,6 +19,10 @@ var db *sql.DB
 
 type Empty struct{}
 
+type LogoutRequest struct {
+	Sessionid *uuid.UUID `json:"sessionid"`
+}
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -29,9 +33,9 @@ type LoginResonse struct {
 }
 
 type PostUserLocation struct {
-    UserID *uuid.UUID `json:"sessionid"`
-	Latitude  *float64 `json:"latitude"`
-	Longitude *float64 `json:"longitude"`
+	UserID    *uuid.UUID `json:"sessionid"`
+	Latitude  *float64   `json:"latitude"`
+	Longitude *float64   `json:"longitude"`
 }
 
 type GetLocationRequest struct {
@@ -149,33 +153,33 @@ func login(c *gin.Context) {
 }
 
 func logout(c *gin.Context) {
+	var req LogoutRequest
 	var resp Empty
 
-	cookie, err := c.Cookie("sessionid")
-	if err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusBadRequest, resp)
 		return
 	}
 
 	var cookiestr sql.NullString
-	row := db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, cookie)
-	err = row.Scan(&cookiestr)
+	row := db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, req.Sessionid)
+	err := row.Scan(&cookiestr)
 
 	if err == sql.ErrNoRows {
-		log.Printf("session id '%s' does not exist\n", cookie)
+		log.Printf("session id '%s' does not exist\n", req.Sessionid)
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
 	}
 
 	tx, _ := db.Begin()
-	_, err = tx.Exec("UPDATE users SET sessionid=null WHERE sessionid=?", cookie)
+	_, err = tx.Exec("UPDATE users SET sessionid=null WHERE sessionid=?", req.Sessionid)
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
 		return
 	}
-	_, err = tx.Exec("DELETE FROM location WHERE sessionid=?", cookie)
+	_, err = tx.Exec("DELETE FROM location WHERE sessionid=?", req.Sessionid)
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
@@ -203,10 +207,9 @@ func postLocation(c *gin.Context) {
 		return
 	}
 
-
 	var username sql.NullString
 	row := db.QueryRow(`SELECT username FROM users WHERE sessionid=$1`, req.UserID)
-    err := row.Scan(&username)
+	err := row.Scan(&username)
 
 	if err == sql.ErrNoRows {
 		log.Printf("session id '%s' does not exist\n", req.UserID)
@@ -279,7 +282,7 @@ func main() {
 	router := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
-    config.AllowOrigins = []string{"http://localhost:5500", "http://heron.cs.umanitoba.ca"}
+	config.AllowOrigins = []string{"http://localhost:5500", "http://heron.cs.umanitoba.ca"}
 	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
