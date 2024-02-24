@@ -8,7 +8,7 @@
 - sessionID [string]
 
 ### location
-- sessionID [string, FOREIGN KEY]
+- sessionID [string, PRIMARY KEY, FOREIGN KEY]
 - longitude [floating point]
 - latitude [floating point]
 
