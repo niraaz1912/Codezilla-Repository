@@ -66,7 +66,9 @@ func createAccount(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("INSERT INTO users (username, role, passhash) VALUES (?, 'user', ?)", req.Username, string(hashed))
+	tx, _ := db.Begin()
+	_, err = tx.Exec("INSERT INTO users (username, role, passhash) VALUES (?, 'user', ?)", req.Username, string(hashed))
+	tx.Commit()
 	if err != nil {
 		log.Println(err)
 		c.IndentedJSON(http.StatusInternalServerError, resp)
@@ -100,7 +102,9 @@ func login(c *gin.Context) {
 			c.SetCookie("session", cookie, 3500, "/", "localhost", false, true)
 		}
 
-		_, err = db.Exec("UPDATE users SET sessionID=? WHERE username=?", sessionid, req.Username)
+		tx, _ := db.Begin()
+		_, err = tx.Exec("UPDATE users SET sessionID=? WHERE username=?", sessionid, req.Username)
+		tx.Commit()
 		if err != nil {
 			log.Println(err)
 			c.IndentedJSON(http.StatusInternalServerError, resp)
