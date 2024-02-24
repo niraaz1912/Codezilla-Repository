@@ -23,6 +23,10 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type LoginResonse struct {
+	Sessionid *uuid.UUID `json:"sessionid"`
+}
+
 type PostUserLocation struct {
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
@@ -83,7 +87,7 @@ func createAccount(c *gin.Context) {
 
 func login(c *gin.Context) {
 	var req LoginRequest
-	var resp Empty
+	var resp LoginResonse
 
 	if err := c.BindJSON(&req); err != nil {
 		log.Println(err)
@@ -137,6 +141,8 @@ func login(c *gin.Context) {
 			return
 		}
 	}
+
+	resp.Sessionid = &sessionid
 
 	c.IndentedJSON(http.StatusOK, resp)
 }
@@ -272,13 +278,7 @@ func main() {
 	}
 
 	router := gin.Default()
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"*"},
-		AllowHeaders:     []string{"Origin"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
+	router.Use(cors.Default())
 
 	router.POST("/login/new", createAccount)
 	router.POST("/login", login)
