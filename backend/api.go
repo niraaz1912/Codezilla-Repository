@@ -29,6 +29,7 @@ type LoginResonse struct {
 }
 
 type PostUserLocation struct {
+    UserID *uuid.UUID `json:"sessionid"`
 	Latitude  *float64 `json:"latitude"`
 	Longitude *float64 `json:"longitude"`
 }
@@ -202,19 +203,13 @@ func postLocation(c *gin.Context) {
 		return
 	}
 
-	cookie, err := c.Cookie("sessionid")
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusForbidden, resp)
-		return
-	}
 
 	var username sql.NullString
-	row := db.QueryRow(`SELECT username FROM users WHERE sessionid=$1`, cookie)
-	err = row.Scan(&username)
+	row := db.QueryRow(`SELECT username FROM users WHERE sessionid=$1`, req.UserID)
+    err := row.Scan(&username)
 
 	if err == sql.ErrNoRows {
-		log.Printf("session id '%s' does not exist\n", cookie)
+		log.Printf("session id '%s' does not exist\n", req.UserID)
 		c.IndentedJSON(http.StatusUnauthorized, resp)
 		return
 	}
@@ -284,7 +279,7 @@ func main() {
 	router := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
-	config.AllowOrigins = []string{"http://localhost", "http://heron.cs.umanitoba.ca"}
+    config.AllowOrigins = []string{"http://localhost:5500", "http://heron.cs.umanitoba.ca"}
 	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
