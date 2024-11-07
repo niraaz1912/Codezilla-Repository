@@ -1,4 +1,4 @@
-const BASE_API_URL="heron.cs.umanitoba.ca:8081/"
+const BASE_API_URL="http://localhost:5500"
 
 export {
     BASE_API_URL
