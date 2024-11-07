@@ -2,17 +2,20 @@
 <html>
 
 <head>
-    <title>Codezilla - Login</title>
+    <title>Codezilla - Signup</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="js/repeat-psw.js"></script>
     <script type="module" src="api.js"></script>
     <script src="auth.js"></script>
+    <script type="module" src="firebase-init.js"></script>
+
 </head>
 
 <body>
     <div class="main">
         <h1>Codezilla : G3 Hack Challenge</h1>
-        <h3>Login</h3>
-        <form id="login-form" action="">
+        <h3>Registration Form</h3>
+        <form id="sign-up-form" action="">
             <label for="email">
                 Email:
             </label>
@@ -23,28 +26,40 @@
             </label>
             <input type="password" id="password" name="password" placeholder="Enter your Password" required>
 
+            <label for="repeat-psw">
+                Repeat Password:
+            </label>
+            <input type="password" id="repeat-psw" name="repeat-psw" placeholder="Repeat Password" required>
+
             <div class="wrap">
-                <button type="submit" id="submit-btn">
-                    Login
+                <button type="submit" id="signup-btn">
+                    Sign Up
                 </button>
             </div>
         </form>
-        <p>Not registered?
-            <a href="signup.html" style="text-decoration: none;">
-                Create an account
+        <p>Already have an account?
+            <a href="login.html" style="text-decoration: none;">
+                Login
             </a>
         </p>
     </div>
+
     <script>
-        document.getElementById("login-form").addEventListener("submit", async function(event) {
+        document.getElementById("sign-up-form").addEventListener("submit", async function(event) {
             event.preventDefault(); // Prevent the form from submitting the default way
-     
+    
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
-     
+            const repeatPassword = document.getElementById("repeat-psw").value;
+    
+            if (password !== repeatPassword) {
+                alert("Passwords do not match");
+                return;
+            }
+    
             // Send data to backend
             try {
-                const response = await fetch("http://localhost:8081/login", {
+                const response = await fetch("http://localhost:8081/login/new", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -54,20 +69,17 @@
                 
                 const data = await response.json();
                 if (response.ok) {
-                    alert("Login successful!");
-                    window.localStorage.setItem("sessionid", data.sessionid); // Save session ID
-                    window.location.href = "dashboard.html"; // Redirect to the dashboard
+                    alert("Signup successful!");
+                    window.location.href = "login.html"; // Redirect to login page
                 } else {
-                    alert(data.error || "Login failed");
+                    alert(data.error || "Signup failed");
                 }
             } catch (error) {
-                console.error("Error during login:", error);
-                alert("An error occurred during login.");
+                console.error("Error during signup:", error);
+                alert("An error occurred during signup.");
             }
         });
-     </script>
-
-
+    </script>
 </body>
 
 </html>

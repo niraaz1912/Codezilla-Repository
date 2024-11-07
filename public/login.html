@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Codezilla - Login</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="module" src="api.js"></script>
+    <script src="auth.js"></script>
+    <script type="module" src="firebase-init.js"></script>
+</head>
+
+<body>
+    <div class="main">
+        <h1>Codezilla : G3 Hack Challenge</h1>
+        <h3>Login</h3>
+        <form id="login-form" action="">
+            <label for="email">
+                Email:
+            </label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required>
+
+            <label for="password">
+                Password:
+            </label>
+            <input type="password" id="password" name="password" placeholder="Enter your Password" required>
+
+            <div class="wrap">
+                <button type="submit" id="submit-btn">
+                    Login
+                </button>
+            </div>
+        </form>
+        <p>Not registered?
+            <a href="signup.html" style="text-decoration: none;">
+                Create an account
+            </a>
+        </p>
+    </div>
+    <script>
+        document.getElementById("login-form").addEventListener("submit", async function(event) {
+            event.preventDefault(); // Prevent the form from submitting the default way
+     
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+     
+            // Send data to backend
+            try {
+                const response = await fetch("http://localhost:8081/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ username: email, password: password })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    alert("Login successful!");
+                    window.localStorage.setItem("sessionid", data.sessionid); // Save session ID
+                    window.location.href = "dashboard.html"; // Redirect to the dashboard
+                } else {
+                    alert(data.error || "Login failed");
+                }
+            } catch (error) {
+                console.error("Error during login:", error);
+                alert("An error occurred during login.");
+            }
+        });
+     </script>
+
+</body>
+
+</html>
