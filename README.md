@@ -6,7 +6,7 @@ The following web application was initially created for [.devHacks](https://devc
 Create a web application that monitors user sessions and locations in real-time, logging the data to a SQL server and displaying it in an interactive dashboard with a map view. When a user logs in to the web page, track their session duration and location and visualize this data on a map within the dashboard.
 
 ## Key Components:
-### User Authentication
+### [User Authentication](https://github.com/niraaz1912/Codezilla-Repository/blob/main/user_authentication.md) 
 Implement a secure user authentication system for accessing the web application.
 
 ### Session Tracking
