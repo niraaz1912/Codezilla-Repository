@@ -1,3 +1,6 @@
+import { BASE_API_URL } from './constants.js';
+
+
 const transformHeaders = (endpoint) => {
   const sessionId = localStorage.getItem("sessionid");
 
@@ -12,9 +15,7 @@ const transformHeaders = (endpoint) => {
   }
 }
 
-const transformEndpoint = (endpoint) => {
-  return "http://heron.cs.umanitoba.ca:8081/" + endpoint;
-}
+const transformEndpoint = (endpoint) => `${BASE_API_URL}${endpoint}`;
 
 
 const postRequest = (endpoint, requestBody) => {
@@ -87,7 +88,7 @@ function login(userEmail, userPwd) {
     password: userPwd,
   };
 
-  const response = fetch("http://heron.cs.umanitoba.ca:8081/" + "login", {
+  const response = fetch(transformEndpoint("login"), {
     method: "POST",
     headers: {
       Accept: "application.json",
