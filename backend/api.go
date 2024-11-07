@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
+
 )
 
 const fileName = "db.db"
@@ -49,104 +50,98 @@ type LocationInstance struct {
 }
 
 func createAccount(c *gin.Context) {
-	var req LoginRequest
-	var resp Empty
+    log.Println("Received signup request")
 
-	if err := c.BindJSON(&req); err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
+    var req LoginRequest
+    if err := c.BindJSON(&req); err != nil {
+        log.Println("Error binding JSON:", err)
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 8)
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
+    log.Printf("Checking if username %s exists", req.Username)
 
-	row := db.QueryRow("select username from users where username=?", req.Username)
+    // Check if the user already exists
+    var existingUsername string
+    row := db.QueryRow("SELECT username FROM users WHERE username = ?", req.Username)
+    err := row.Scan(&existingUsername)
 
-	var username string
-	err = row.Scan(&username)
-	if err != sql.ErrNoRows {
-		log.Println("User already exists")
-		c.IndentedJSON(http.StatusUnauthorized, resp)
-		return
-	}
+    if err == nil {
+        log.Println("User already exists:", req.Username)
+        c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
+        return
+    } else if err != sql.ErrNoRows {
+        log.Println("Error checking for existing user:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+        return
+    }
 
-	tx, _ := db.Begin()
-	_, err = tx.Exec("INSERT INTO users (username, role, passhash) VALUES (?, 'user', ?)", req.Username, string(hashed))
-	tx.Commit()
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
+    log.Println("Username available, creating new account")
 
-	c.IndentedJSON(http.StatusCreated, resp)
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+    if err != nil {
+        log.Println("Error hashing password:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
+        return
+    }
+
+    // Insert user with a default role of "user"
+    _, err = db.Exec("INSERT INTO users (username, passhash, role) VALUES (?, ?, ?)", req.Username, hashedPassword, "user")
+    if err != nil {
+        log.Println("Error inserting new user:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user"})
+        return
+    }
+
+    log.Println("Account created successfully for", req.Username)
+    c.JSON(http.StatusOK, gin.H{"message": "Account created successfully"})
 }
+
+
+
 
 func login(c *gin.Context) {
-	var req LoginRequest
-	var resp LoginResonse
+    log.Println("Received login request")
 
-	if err := c.BindJSON(&req); err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
+    var req LoginRequest
+    if err := c.BindJSON(&req); err != nil {
+        log.Println("Error binding JSON:", err)
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
 
-	var sessionIdString sql.NullString
-	var passhash string
+    log.Printf("Checking if username %s exists", req.Username)
 
-	log.Println(req.Username)
-	row := db.QueryRow("SELECT sessionID, passhash FROM users WHERE username=?", req.Username)
-	err := row.Scan(&sessionIdString, &passhash)
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusUnauthorized, resp)
-		return
-	}
+    // Retrieve the user's hashed password from the database
+    var storedHashedPassword string
+    row := db.QueryRow("SELECT passhash FROM users WHERE username = ?", req.Username)
+    err := row.Scan(&storedHashedPassword)
+    
+    if err == sql.ErrNoRows {
+        log.Println("User not found:", req.Username)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+        return
+    } else if err != nil {
+        log.Println("Error retrieving user data:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+        return
+    }
 
-	if err := bcrypt.CompareHashAndPassword([]byte(passhash), []byte(req.Password)); err != nil {
-		log.Println(passhash)
-		log.Println(err)
-		c.IndentedJSON(http.StatusUnauthorized, resp)
-		return
-	}
+    log.Println("User found, comparing password")
 
-	sessionid := uuid.New()
-	if !sessionIdString.Valid {
-		cookie, err := c.Cookie("sessionid")
+    // Compare the hashed password with the provided password
+    err = bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(req.Password))
+    if err != nil {
+        log.Println("Password mismatch for user:", req.Username)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+        return
+    }
 
-		if err != nil {
-			cookie = sessionid.String()
-			c.SetCookie("sessionid", cookie, 100000, "/", "localhost", false, true)
-		}
-
-		tx, _ := db.Begin()
-		_, err = tx.Exec("UPDATE users SET sessionID=? WHERE username=?", sessionid, req.Username)
-		tx.Commit()
-		if err != nil {
-			log.Println(err)
-			c.IndentedJSON(http.StatusInternalServerError, resp)
-			return
-		}
-	} else {
-		var err error
-		sessionid, err = uuid.Parse(sessionIdString.String)
-		if err != nil {
-			log.Println(err)
-			c.IndentedJSON(http.StatusBadRequest, resp)
-			return
-		}
-	}
-
-	resp.Sessionid = &sessionid
-
-	c.IndentedJSON(http.StatusOK, resp)
+    // Login successful
+    log.Println("Login successful for user:", req.Username)
+    c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
 }
+
 
 func logout(c *gin.Context) {
 	var req LogoutRequest
@@ -256,6 +251,9 @@ func getLocation(c *gin.Context) {
 func main() {
 	var err error
 
+	// Set Gin to release mode for production
+    gin.SetMode(gin.ReleaseMode)
+
 	db, err = sql.Open("sqlite3", fileName)
 
 	if err != nil {
@@ -263,9 +261,15 @@ func main() {
 	}
 
 	router := gin.Default()
+
+	// Configure trusted proxies
+    router.SetTrustedProxies([]string{"127.0.0.1"}) 
+
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
-	config.AllowOrigins = []string{"http://localhost:5500", "http://heron.cs.umanitoba.ca"}
+	config.AllowOrigins = []string{"http://localhost:5500", "http://127.0.0.1:5500" , "http://heron.cs.umanitoba.ca"}
+	config.AllowMethods = []string{"POST", "GET", "OPTIONS"}
+    config.AllowHeaders = []string{"Content-Type"}
 	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
