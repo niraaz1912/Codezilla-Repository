@@ -5,6 +5,8 @@
     <title>Codezilla - Signup</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="js/repeat-psw.js"></script>
+    <script type="module" src="api.js"></script>
+    <script src="auth.js"></script>
 </head>
 
 <body>
@@ -40,8 +42,42 @@
         </p>
     </div>
 
-    <script async src="api.js"></script>
-    <script async src="auth.js"></script>
+    <script>
+        document.getElementById("sign-up-form").addEventListener("submit", async function(event) {
+            event.preventDefault(); // Prevent the form from submitting the default way
+    
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            const repeatPassword = document.getElementById("repeat-psw").value;
+    
+            if (password !== repeatPassword) {
+                alert("Passwords do not match");
+                return;
+            }
+    
+            // Send data to backend
+            try {
+                const response = await fetch("http://localhost:8081/login/new", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ username: email, password: password })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    alert("Signup successful!");
+                    window.location.href = "login.html"; // Redirect to login page
+                } else {
+                    alert(data.error || "Signup failed");
+                }
+            } catch (error) {
+                console.error("Error during signup:", error);
+                alert("An error occurred during signup.");
+            }
+        });
+    </script>
 </body>
 
 </html>
