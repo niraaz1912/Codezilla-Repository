@@ -23,3 +23,10 @@ window.onload = () => {
         }
     }
 }
+
+const logout = () => {
+    // Clear session data
+    localStorage.removeItem("sessionid");
+    // Redirect to the login page
+    window.location.replace("/login.html");
+};
