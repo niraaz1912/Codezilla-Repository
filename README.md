@@ -7,9 +7,11 @@ The following web application was initially created for [.devHacks](https://devc
 When signing up, it receives JSON with username and password.
 It queries the database if the username already exists, if it does, it returns 409 status.
 
+![Screenshot 2024-11-07 040000](https://github.com/user-attachments/assets/a084d8f9-c46a-4183-9969-ef40475953f5)
+
 It uses bcrypt to hash the password. Then inserts new user with hashed password into the database with default role.
 
-![Screenshot 2024-11-07 040000](https://github.com/user-attachments/assets/a084d8f9-c46a-4183-9969-ef40475953f5)
+![Screenshot 2024-11-07 113555](https://github.com/user-attachments/assets/b7eca0ef-d70d-449b-b7f3-329ab13405b1)
 
 The following are the logs in the server during signing up:
 
