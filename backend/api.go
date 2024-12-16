@@ -101,87 +101,95 @@ func createAccount(c *gin.Context) {
 
 
 func login(c *gin.Context) {
-    log.Println("Received login request")
-
     var req LoginRequest
     if err := c.BindJSON(&req); err != nil {
-        log.Println("Error binding JSON:", err)
+        log.Println("Error parsing request body:", err)
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
 
-    log.Printf("Checking if username %s exists", req.Username)
-
-    // Retrieve the user's hashed password from the database
+    // Validate user and password (retrieve from DB)
     var storedHashedPassword string
     row := db.QueryRow("SELECT passhash FROM users WHERE username = ?", req.Username)
     err := row.Scan(&storedHashedPassword)
-    
     if err == sql.ErrNoRows {
-        log.Println("User not found:", req.Username)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
-    } else if err != nil {
-        log.Println("Error retrieving user data:", err)
+    }
+
+    // Compare passwords
+    if err := bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(req.Password)); err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+        return
+    }
+
+    // Generate session ID and update DB
+    sessionID := uuid.New()
+    startTime := time.Now()
+    _, err = db.Exec("UPDATE users SET sessionid = ?, start_time = ?, end_time = NULL WHERE username = ?", sessionID, startTime, req.Username)
+    if err != nil {
+        log.Println("Error updating session:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
         return
     }
 
-    log.Println("User found, comparing password")
+    log.Printf("Session created: %s for user: %s", sessionID, req.Username)
 
-    // Compare the hashed password with the provided password
-    err = bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(req.Password))
-    if err != nil {
-        log.Println("Password mismatch for user:", req.Username)
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
-        return
-    }
-
-    // Login successful
-    log.Println("Login successful for user:", req.Username)
-    c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+    // Send session ID to frontend
+    c.JSON(http.StatusOK, gin.H{"sessionid": sessionID.String()})
 }
+
 
 
 func logout(c *gin.Context) {
-	var req LogoutRequest
-	var resp Empty
+    var req LogoutRequest
+    var resp Empty
 
-	if err := c.BindJSON(&req); err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
+    log.Println("Logout called!")
+    if err := c.BindJSON(&req); err != nil {
+        log.Println("Error parsing request body:", err)
+        c.IndentedJSON(http.StatusBadRequest, resp)
+        return
+    }
 
-	var cookiestr sql.NullString
-	row := db.QueryRow(`SELECT sessionid FROM users WHERE sessionid=$1`, req.Sessionid)
-	err := row.Scan(&cookiestr)
+    log.Printf("Received session ID: %v", req.Sessionid) // Log the received session ID
 
-	if err == sql.ErrNoRows {
-		log.Printf("session id '%s' does not exist\n", req.Sessionid)
-		c.IndentedJSON(http.StatusUnauthorized, resp)
-		return
-	}
+    if req.Sessionid == nil {
+        log.Println("Session ID is missing or invalid")
+        c.IndentedJSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID"})
+        return
+    }
 
-	tx, _ := db.Begin()
-	_, err = tx.Exec("UPDATE users SET sessionid=null WHERE sessionid=?", req.Sessionid)
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
-	_, err = tx.Exec("DELETE FROM location WHERE sessionid=?", req.Sessionid)
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
-	tx.Commit()
+    var cookiestr sql.NullString
+    row := db.QueryRow(`SELECT sessionid FROM users WHERE sessionid = ?`, req.Sessionid)
+    err := row.Scan(&cookiestr)
 
-	c.SetCookie("sessionid", "", -1, "/", "localhost", false, true)
+    if err == sql.ErrNoRows {
+        log.Printf("Session ID '%s' does not exist\n", req.Sessionid)
+        c.IndentedJSON(http.StatusUnauthorized, gin.H{"error": "Session not found"})
+        return
+    }
 
-	c.IndentedJSON(http.StatusOK, resp)
+    log.Println("Session found, proceeding to logout")
+    // Update database and invalidate session ID
+    tx, _ := db.Begin()
+    endTime := time.Now()
+
+    _, err = tx.Exec("UPDATE users SET sessionid = NULL, end_time = ? WHERE sessionid = ?", endTime, req.Sessionid)
+    if err != nil {
+        tx.Rollback()
+        log.Println("Error updating session end time:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+        return
+    }
+    tx.Commit()
+
+    c.SetCookie("sessionid", "", -1, "/", "localhost", false, true)
+
+    log.Println("Logout successful for session ID:", req.Sessionid)
+    c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
+
 
 func postLocation(c *gin.Context) {
 	var req PostUserLocation

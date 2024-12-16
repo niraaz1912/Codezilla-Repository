@@ -1,3 +1,5 @@
+import { BASE_API_URL } from './constants.js';
+
 const isUserLoggedIn = () => {
     const sessionId = localStorage.getItem("sessionid");
 
@@ -24,9 +26,32 @@ window.onload = () => {
     }
 }
 
+const transformEndpoint = (endpoint) => `${BASE_API_URL}${endpoint}`;
+
 const logout = () => {
-    // Clear session data
-    localStorage.removeItem("sessionid");
-    // Redirect to the login page
-    window.location.replace("/login.html");
+    const sessionId = localStorage.getItem("sessionid");
+    console.log("Session ID being sent:", sessionId); // Log session ID
+
+    fetch(transformEndpoint("/logout"), {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sessionid: sessionId }),
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log("Logout successful");
+            localStorage.removeItem("sessionid");
+            window.location.replace("/login.html");
+        } else {
+            console.error("Logout failed:", response.statusText);
+        }
+    })
+    .catch(err => {
+        console.error("Error during logout:", err);
+    });
 };
+
+// Attach logout to the global `window` object for use in dashboard.html
+window.logout = logout;

@@ -82,24 +82,31 @@ loginForm?.addEventListener("submit", (e) => {
 })
 
 
-function login(userEmail, userPwd) {
-  const requestBody = {
-    username: userEmail,
-    password: userPwd,
-  };
-
-  const response = fetch(transformEndpoint("login"), {
-    method: "POST",
-    headers: {
-      Accept: "application.json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
+function login(username, password) {
+  fetch(`${BASE_API_URL}/login`, {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
   })
-    .then((res) => res.json())
-    .then((out) => {
-      localStorage.setItem("sessionid", out["sessionid"])
-      window.location.replace("/dashboard.html")
-    });
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      } else {
+          console.error("Login failed with status:", response.status);
+          throw new Error("Login failed");
+      }
+  })
+  .then(data => {
+      console.log("Session ID received:", data.sessionid); // Log the session ID
+      localStorage.setItem("sessionid", data.sessionid);  // Store session ID in localStorage
+      window.location.replace("/dashboard.html");
+  })
+  .catch(error => {
+      console.error("Error during login:", error);
+  });
 }
+
+
 // #endregion

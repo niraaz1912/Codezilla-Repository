@@ -54,7 +54,6 @@
                 
                 const data = await response.json();
                 if (response.ok) {
-                    alert("Login successful!");
                     window.localStorage.setItem("sessionid", data.sessionid); // Save session ID
                     window.location.href = "dashboard.html"; // Redirect to the dashboard
                 } else {
