@@ -2,40 +2,33 @@
 
 The following web application was initially created for [.devHacks](https://devclub.ca/devhacks). 
 
-## Creating Account
+## Title: User Session and Location Monitoring Dashboard with Map View
+Create a web application that monitors user sessions and locations in real-time, logging the data to a SQL server and displaying it in an interactive dashboard with a map view. When a user logs in to the web page, track their session duration and location and visualize this data on a map within the dashboard.
 
-When signing up, it receives JSON with username and password.
-It queries the database if the username already exists, if it does, it returns 409 status.
+## Key Components:
+### [User Authentication](https://github.com/niraaz1912/Codezilla-Repository/blob/main/user_authentication.md) 
+Implement a secure user authentication system for accessing the web application.
 
-![Screenshot 2024-11-07 040000](https://github.com/user-attachments/assets/a084d8f9-c46a-4183-9969-ef40475953f5)
+### Session Tracking
+Develop functionality to track user sessions, recording the start time when a user logs in and the end time when they log out or close the tab/browser.
 
-It uses bcrypt to hash the password. Then inserts new user with hashed password into the database with default role.
+### Location Tracking
+Utilize browser geolocation API or IP-based geolocation to determine the user's location accurately. Log this information along with the session data to the SQL server.
 
-![Screenshot 2024-11-07 113555](https://github.com/user-attachments/assets/b7eca0ef-d70d-449b-b7f3-329ab13405b1)
+### SQL Database Integration
+Set up a SQL database to store user session and location data efficiently. Design appropriate tables to maintain this data.
 
-The following are the logs in the server during signing up:
+### Real-time Updates
+Implement real-time updates to the dashboard to reflect the latest user session and location data as it is logged to the SQL server. Utilize WebSockets or server-sent events for real-time communication.
 
-![Screenshot 2024-11-07 035829](https://github.com/user-attachments/assets/6d95e99e-7272-47e1-9507-d7b1c1fe5544)
+### Dashboard Visualization
+Design an interactive dashboard with a map view to visualize user location data. Use a mapping library like Leaflet.js or Google Maps API to display user locations dynamically on the map.
 
+### User Interface (UI)
+Create a user-friendly UI for the dashboard, allowing administrators to view and analyze user session and location data easily. Include features for filtering, searching, and customizing the displayed data.
 
-## Logging in
+### Performance Optimization
+Optimize the performance of both the web application and the SQL server to handle a potentially large volume of user session and location data efficiently.
 
-When logging in, it receives JSON with username and password. 
-
-It checks if the username exists, if it does not, it returns 401 status. It then compares the hashed password using bcrypt and if successful, returns with 200.
-
-![Screenshot 2024-11-07 040043](https://github.com/user-attachments/assets/795c776d-aff4-405b-a2a8-086b6c0a4a25)
-
-The following logs are generated during successful login:
-
-![Screenshot 2024-11-07 040126](https://github.com/user-attachments/assets/e5a930c0-c8d1-4249-84b9-a3e99b1c06aa)
-
-
-## Invalid Login
-
-Invalid logins are handled by returning 401 status.
-
-![Screenshot 2024-11-07 040418](https://github.com/user-attachments/assets/66d6eb06-b9cb-4198-b83c-561ed84fdf42)
-
-![Screenshot 2024-11-07 040454](https://github.com/user-attachments/assets/bcf2a218-f16c-48c3-a5b5-f6ded825d231)
-
+### Security Measures
+Implement security measures to protect user data, including encryption of sensitive information and preventing unauthorized access to the dashboard.
