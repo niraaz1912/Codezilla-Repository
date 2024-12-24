@@ -86,7 +86,7 @@ func createAccount(c *gin.Context) {
     }
 
     // Insert user with a default role of "user"
-    _, err = db.Exec("INSERT INTO users (username, passhash, role) VALUES (?, ?, ?)", req.Username, hashedPassword, "user")
+    _, err = db.Exec("INSERT OR IGNORE INTO users (username, passhash, role) VALUES (?, ?, ?)", req.Username, hashedPassword, "user")
     if err != nil {
         log.Println("Error inserting new user:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user"})
@@ -100,6 +100,11 @@ func createAccount(c *gin.Context) {
 
 
 
+type LoginResponse struct {
+    Sessionid *uuid.UUID `json:"sessionid"`
+    Role      string      `json:"role"`
+}
+
 func login(c *gin.Context) {
     var req LoginRequest
     if err := c.BindJSON(&req); err != nil {
@@ -108,36 +113,91 @@ func login(c *gin.Context) {
         return
     }
 
-    // Validate user and password (retrieve from DB)
-    var storedHashedPassword string
-    row := db.QueryRow("SELECT passhash FROM users WHERE username = ?", req.Username)
-    err := row.Scan(&storedHashedPassword)
-    if err == sql.ErrNoRows {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+    var storedHashedPassword, role string
+    row := db.QueryRow("SELECT passhash, role FROM users WHERE username = ?", req.Username)
+    if err := row.Scan(&storedHashedPassword, &role); err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+            return
+        }
+        log.Println("Error retrieving user role:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
         return
     }
 
-    // Compare passwords
     if err := bcrypt.CompareHashAndPassword([]byte(storedHashedPassword), []byte(req.Password)); err != nil {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
 
-    // Generate session ID and update DB
     sessionID := uuid.New()
     startTime := time.Now()
-    _, err = db.Exec("UPDATE users SET sessionid = ?, start_time = ?, end_time = NULL WHERE username = ?", sessionID, startTime, req.Username)
+    _, err := db.Exec("UPDATE users SET sessionid = ?, start_time = ?, end_time = NULL WHERE username = ?", sessionID, startTime, req.Username)
     if err != nil {
         log.Println("Error updating session:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
         return
     }
 
-    log.Printf("Session created: %s for user: %s", sessionID, req.Username)
-
-    // Send session ID to frontend
-    c.JSON(http.StatusOK, gin.H{"sessionid": sessionID.String()})
+    c.JSON(http.StatusOK, LoginResponse{Sessionid: &sessionID, Role: role})
 }
+
+
+type Session struct {
+    Username   string `json:"username"`
+    Role       string `json:"role"`
+    StartTime  string `json:"start_time"`
+    EndTime    string `json:"end_time,omitempty"` // Optional field for active sessions
+}
+
+func getSessions(c *gin.Context) {
+    usernameFilter := c.Query("username") // Get `username` query parameter
+    roleFilter := c.Query("role")        // Get `role` query parameter
+
+    // Build the query dynamically based on filters
+    query := "SELECT username, role, start_time, end_time FROM users WHERE 1=1"
+    args := []interface{}{}
+
+    if usernameFilter != "" {
+        query += " AND username LIKE ?"
+        args = append(args, "%"+usernameFilter+"%")
+    }
+    if roleFilter != "" {
+        query += " AND role = ?"
+        args = append(args, roleFilter)
+    }
+
+    rows, err := db.Query(query, args...)
+    if err != nil {
+        log.Println("Error fetching sessions:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sessions"})
+        return
+    }
+    defer rows.Close()
+
+    var sessions []Session
+    for rows.Next() {
+        var session Session
+        var endTime sql.NullString
+        if err := rows.Scan(&session.Username, &session.Role, &session.StartTime, &endTime); err != nil {
+            log.Println("Error scanning session row:", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sessions"})
+            return
+        }
+
+        session.EndTime = "Active"
+        if endTime.Valid {
+            session.EndTime = endTime.String
+        }
+
+        sessions = append(sessions, session)
+    }
+
+    c.JSON(http.StatusOK, sessions)
+}
+
+
+
 
 
 
@@ -192,69 +252,130 @@ func logout(c *gin.Context) {
 
 
 func postLocation(c *gin.Context) {
-	var req PostUserLocation
-	var resp Empty
+    var req PostUserLocation
 
-	if err := c.BindJSON(&req); err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
-	if req.Latitude == nil || req.Longitude == nil {
-		log.Println("invalid latitude or longitude")
-		c.IndentedJSON(http.StatusBadRequest, resp)
-		return
-	}
+    if err := c.BindJSON(&req); err != nil {
+        log.Println("Error parsing location data:", err)
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
 
-	var username sql.NullString
-	row := db.QueryRow(`SELECT username FROM users WHERE sessionid=$1`, req.UserID)
-	err := row.Scan(&username)
+    if req.Latitude == nil || req.Longitude == nil || req.UserID == nil {
+        log.Println("Invalid latitude, longitude, or session ID")
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid location data"})
+        return
+    }
 
-	if err == sql.ErrNoRows {
-		log.Printf("session id '%s' does not exist\n", req.UserID)
-		c.IndentedJSON(http.StatusUnauthorized, resp)
-		return
-	}
+    // Validate session ID
+    var username sql.NullString
+    row := db.QueryRow("SELECT username FROM users WHERE sessionid = ?", req.UserID)
+    err := row.Scan(&username)
 
-	tx, _ := db.Begin()
-	_, err = tx.Exec("INSERT INTO locationhistory (username, longitude, latitude, time) VALUES (?, ?, ?, ?)", username, req.Longitude, req.Latitude, time.Now().Unix())
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
-	tx.Commit()
+    if err == sql.ErrNoRows {
+        log.Printf("Session ID '%s' not found", req.UserID)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+        return
+    }
 
-	c.IndentedJSON(http.StatusCreated, resp)
+    // Insert location data into database
+    tx, err := db.Begin()
+    if err != nil {
+        log.Println("Error starting transaction:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+        return
+    }
+
+    _, err = tx.Exec("INSERT OR REPLACE INTO locationhistory (username, longitude, latitude, time) VALUES (?, ?, ?, ?)", username.String, req.Longitude, req.Latitude, time.Now().Unix())
+    if err != nil {
+        tx.Rollback()
+        log.Println("Error inserting location data:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log location"})
+        return
+    }
+
+    tx.Commit()
+    log.Println("Location data logged for user:", username.String)
+    c.JSON(http.StatusCreated, gin.H{"message": "Location logged successfully"})
 }
+
 
 func getLocation(c *gin.Context) {
-	var resp GetLocationResponse
+    var resp GetLocationResponse
 
-	rows, err := db.Query("select users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time from locationhistory left join users on users.username=locationhistory.username")
-	if err != nil {
-		log.Println(err)
-		c.IndentedJSON(http.StatusInternalServerError, resp)
-		return
-	}
+    // Validate session ID and get user role
+    sessionID := c.Request.Header.Get("SessionID")
+    if sessionID == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ID missing"})
+        return
+    }
 
-	locationHistoriesMap := map[string][]LocationInstance{}
-	for rows.Next() {
-		var key string
-		location := LocationInstance{}
-		if err := rows.Scan(&key, &location.Longitude, &location.Latitude, &location.Time); err != nil {
-			log.Println(err)
-			c.IndentedJSON(http.StatusInternalServerError, resp)
-			return
-		}
+    var username string
+    var role string
+    row := db.QueryRow("SELECT username, role FROM users WHERE sessionid = ?", sessionID)
+    if err := row.Scan(&username, &role); err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+            return
+        }
+        log.Println("Error retrieving user role:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+        return
+    }
 
-		locationHistoriesMap[key] = append(locationHistoriesMap[key], location)
-	}
+    // Check role
+    if role != "admin" {
+        log.Printf("User %s does not have admin privileges", username)
+        c.JSON(http.StatusOK, gin.H{"locations": map[string][]LocationInstance{}})
+        return
+    }
 
-	resp.Locations = locationHistoriesMap
+    // Admin: Get all user locations
+    rows, err := db.Query("SELECT users.username, locationhistory.longitude, locationhistory.latitude, locationhistory.time FROM locationhistory LEFT JOIN users ON users.username = locationhistory.username")
+    if err != nil {
+        log.Println(err)
+        c.JSON(http.StatusInternalServerError, resp)
+        return
+    }
 
-	c.IndentedJSON(http.StatusOK, resp)
+    locationHistoriesMap := map[string][]LocationInstance{}
+    for rows.Next() {
+        var key string
+        location := LocationInstance{}
+        if err := rows.Scan(&key, &location.Longitude, &location.Latitude, &location.Time); err != nil {
+            log.Println(err)
+            c.JSON(http.StatusInternalServerError, resp)
+            return
+        }
+
+        locationHistoriesMap[key] = append(locationHistoriesMap[key], location)
+    }
+
+    resp.Locations = locationHistoriesMap
+    c.JSON(http.StatusOK, resp)
 }
+
+func getUserRole(c *gin.Context) {
+    sessionID := c.Request.Header.Get("SessionID")
+    if sessionID == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ID missing"})
+        return
+    }
+
+    var role string
+    row := db.QueryRow("SELECT role FROM users WHERE sessionid = ?", sessionID)
+    if err := row.Scan(&role); err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+            return
+        }
+        log.Println("Error retrieving user role:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Server error"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"role": role})
+}
+
 
 func main() {
 	var err error
@@ -277,7 +398,7 @@ func main() {
 	config.AllowCredentials = true
 	config.AllowOrigins = []string{"http://localhost:5500", "http://127.0.0.1:5500" , "http://heron.cs.umanitoba.ca"}
 	config.AllowMethods = []string{"POST", "GET", "OPTIONS"}
-    config.AllowHeaders = []string{"Content-Type"}
+    config.AllowHeaders = []string{"Content-Type", "SessionID"}
 	router.Use(cors.New(config))
 
 	router.POST("/login/new", createAccount)
@@ -285,6 +406,9 @@ func main() {
 	router.POST("/logout", logout)
 	router.POST("/location", postLocation)
 	router.GET("/location", getLocation)
+    router.GET("/user/role", getUserRole)
+    router.GET("/sessions", getSessions)
+
 
 	router.Run(":8081")
 }

@@ -1,21 +1,13 @@
 import { BASE_API_URL } from './constants.js';
 
-const isUserLoggedIn = () => {
-    const sessionId = localStorage.getItem("sessionid");
-
-    if (sessionId) {
-        window.location.replace("/dashboard.html")
-    }
-}
-
 const publicRoutes = ["/login.html", "/signup.html"];
-const privateRoutes = ["/dashboard.html"];
+const privateRoutes = ["/dashboard.html", "user_dashboard.html"];
 
 window.onload = () => {
     const sessionId = localStorage.getItem("sessionid");
     if (sessionId) {
         if (publicRoutes.includes(window.location.pathname)) {
-            window.location.replace("/dashboard.html")
+            window.location.replace("/user_dashboard.html")//****************************** */
         }
     }
 
@@ -55,3 +47,26 @@ const logout = () => {
 
 // Attach logout to the global `window` object for use in dashboard.html
 window.logout = logout;
+
+export const getUserRole = () => {
+    const sessionId = localStorage.getItem("sessionid");
+
+    return fetch(`${BASE_API_URL}/user/role`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+            "SessionID": sessionId, // Pass session ID
+        },
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Failed to fetch user role");
+        }
+        return response.json();
+    })
+    .then(data => data.role)
+    .catch(err => {
+        console.error("Error fetching user role:", err);
+        return null;
+    });
+};
