@@ -1,3 +1,5 @@
+# User Authentication
+
 ## Creating Account
 
 When signing up, it receives JSON with username and password.
