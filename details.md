@@ -37,3 +37,45 @@ Invalid logins are handled by returning 401 status.
 
 ![Screenshot 2024-11-07 040454](https://github.com/user-attachments/assets/bcf2a218-f16c-48c3-a5b5-f6ded825d231)
 
+
+# Session Tracking
+
+Upon successful login, the program generates a new session ID for the user and then stores the start time of their session.
+
+After logging out, it deletes the session ID and stores the session's end time.
+
+![image](https://github.com/user-attachments/assets/da260d32-5ac2-4799-bd36-d1d5486ea0ee)
+
+
+# Location Tracking
+
+After the user logs in, they can send their location data to the server through a button, which requires browser permission. 
+
+![image](https://github.com/user-attachments/assets/dcd2b872-5d01-42b5-abeb-4bfb40fd3700)
+
+The location is logged in the SQL database.
+
+![Screenshot 2024-12-24 000642](https://github.com/user-attachments/assets/c2746679-31e5-4f74-86d5-941585a470f2)
+
+
+# SQL Database
+
+There are 2 tables.
+1. Users: username, role, passhash, sessionID, start_time, end_time
+2. Location History: username, latitude, longitude, time
+
+
+# Real time updates
+
+All the data are updated in real time.
+
+
+# Dashboard Visualization and UI
+
+When anyone logs in with a admin role, they are redirected to dashboard where they get the insight of the active users, their location and session.
+When hovering over the markers on the map, it displays the username.
+
+![Screenshot 2024-12-24 000528](https://github.com/user-attachments/assets/6e55050d-594c-4fe1-9a9b-1e84d85bc8ae)
+
+
+
