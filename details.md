@@ -28,6 +28,7 @@ The following logs are generated during successful login:
 
 ![Screenshot 2024-11-07 040126](https://github.com/user-attachments/assets/e5a930c0-c8d1-4249-84b9-a3e99b1c06aa)
 
+It then compares the role. Anyone logging in with an admin role is redirected to a dashboard, where they get insight into the active users, their location, and their session. The users dashboard only allows them to send the location.
 
 ## Invalid Login
 
